@@ -4,67 +4,49 @@ from pypdf import PdfReader
 from sentence_transformers import SentenceTransformer, util
 import requests
 
-def show_ollama_error(error):
-
-    if isinstance(error, requests.exceptions.ConnectionError):
-
-        st.error("Ollama is not running. Please open Ollama and try again.")
-
-    elif isinstance(error, requests.exceptions.Timeout):
-
-        st.error("The AI is taking too long. Please try again.")
-
-    else:
-
-        st.error("Ollama could not generate a response. Please try again.")
-
-        st.caption(f"Technical details: {error}")
-
 st.set_page_config(
     page_title="Knowlume AI",
     page_icon="📚",
     layout="wide"
 )
 
-st.markdown("""
-<style>
-    .stApp {
-        background-color: #F5F7FB;
-    }
-
-    [data-testid="stSidebar"] {
-        background-color: #111827;
-    }
-
-    [data-testid="stSidebar"] * {
-        color: white;
-    }
-
-    h1, h2, h3 {
-        color: #172554;
-    }
-
-    .stButton > button {
-        background-color: #2563EB;
-        color: white;
-        border-radius: 8px;
-        border: none;
-        padding: 10px 20px;
-    }
-
-    .stButton > button:hover {
-        background-color: #1D4ED8;
-        color: white;
-    }
-</style>
-""", unsafe_allow_html=True)
-
 @st.cache_resource
 def load_embedding_model():
+    return SentenceTransformer("all-MiniLM-L6-v2")
 
-    model = SentenceTransformer("all-MiniLM-L6-v2")
+def show_ollama_error(error):
 
-    return model
+    st.error("Knowlume AI could not connect to the hosted AI service.")
+    st.caption(f"Technical details: {error}")
+
+
+def groq_chat(prompt):
+
+    api_key = st.secrets["GROQ_API_KEY"]
+
+    response = requests.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "model": "openai/gpt-oss-20b",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": prompt
+                }
+            ],
+            "max_completion_tokens": 2048
+        },
+        timeout=120
+    )
+
+    response.raise_for_status()
+
+    return response.json()["choices"][0]["message"]["content"]
+
 
 def generate_answer(question, context):
 
@@ -85,19 +67,8 @@ def generate_answer(question, context):
     Answer:
     """
 
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "qwen2.5:0.5b",
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=180
-    )
+    return groq_chat(prompt)
 
-    response.raise_for_status()
-
-    return response.json()["response"]
 
 def generate_summary(document_text):
 
@@ -123,19 +94,7 @@ def generate_summary(document_text):
     SUMMARY:
     """
 
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "qwen2.5:0.5b",
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=180
-    )
-
-    response.raise_for_status()
-
-    return response.json()["response"]
+    return groq_chat(prompt)
 
 
 def compare_documents(document_a, document_b):
@@ -161,19 +120,8 @@ def compare_documents(document_a, document_b):
     Do not invent information.
     """
 
-    response = requests.post(
-        "http://localhost:11434/api/generate",
-        json={
-            "model": "qwen2.5:0.5b",
-            "prompt": prompt,
-            "stream": False
-        },
-        timeout=180
-    )
+    return groq_chat(prompt)
 
-    response.raise_for_status()
-
-    return response.json()["response"]
 
 
 def clean_text(text):
@@ -416,9 +364,9 @@ if selected_page == "📝 Document Summary":
                         st.subheader("Document Summary")
                         st.write(summary)
 
-                    except requests.exceptions.RequestException as e:
-
-                        show_ollama_error(e)
+                    except Exception as e:
+                        st.error("Knowlume AI error")
+                        st.code(str(e))
 
 if selected_page == "📊 Compare Documents":
 
@@ -476,9 +424,9 @@ if selected_page == "📊 Compare Documents":
                             st.subheader("Comparison Results")
                             st.write(comparison)
 
-                        except requests.exceptions.RequestException as e:
-                            st.error("Could not connect to Ollama.")
-                            st.write(str(e))
+                        except Exception as e:
+                            st.error("Knowlume AI error")
+                            st.code(str(e))
 
     else:
         st.info("Upload at least 2 PDF documents from the Dashboard.")
@@ -592,10 +540,9 @@ if selected_page == "💬 Ask Documents":
 
                         
 
-                    except requests.exceptions.RequestException as e:
-                        st.error("Could not connect to Ollama.")
-                        
-                        st.write(str(e))
+                    except Exception as e:
+                        st.error("Knowlume AI error")
+                        st.code(str(e))
 
         elif search_query:
             st.warning("No readable document chunks available.")
